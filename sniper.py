@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 TELEGRAM_TOKEN  = "8754418638:AAGcTK-B6iNAjwY9EANg1IHl7bUTBpy7cso"
 TELEGRAM_CHAT_ID = "1911377719"
 RIYADH_TZ       = ZoneInfo("Asia/Riyadh")
-MAX_AGE_DAYS     = 3
+MAX_AGE_DAYS     = 5  # زدنا لـ 5 أيام لنمسك إعلانات أكثر
 
 # ملف الذاكرة — يحفظ الإعلانات اللي شفناها
 SEEN_FILE = "seen_listings.json"  # GitHub Actions يحفظه في نفس المجلد
@@ -355,8 +355,18 @@ def fetch_bybit():
                 params={"locale":"en-US","type":cat,"page":1,"limit":30},
                 headers=HEADERS, timeout=10
             )
-            if r.status_code != 200: continue
-            for item in r.json().get("result",{}).get("list",[]):
+            if r.status_code != 200:
+                print(f"  Bybit {cat}: HTTP {r.status_code}")
+                continue
+            items = r.json().get("result",{}).get("list",[])
+            print(f"  Bybit {cat}: {len(items)} إعلان إجمالاً")
+            for item in items[:5]:  # اطبع أول 5 للتشخيص
+                title = item.get("title","")
+                ts = item.get("dateTimestamp") or item.get("publishTime",0)
+                recent = is_recent(ts)
+                matched = is_listing(title)
+                print(f"    [{('✅' if recent else '❌ قديم')}][{('✅' if matched else '❌ لا يطابق')}] {title[:60]}")
+            for item in items:
                 title = item.get("title","")
                 if not is_listing(title): continue
                 ts = item.get("dateTimestamp") or item.get("publishTime",0)
