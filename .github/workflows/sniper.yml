@@ -8,7 +8,6 @@ on:
 jobs:
   run-sniper:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,19 +20,8 @@ jobs:
       - name: Install dependencies
         run: pip install requests tzdata
 
-      - name: Restore seen listings cache
-        uses: actions/cache@v4
-        with:
-          path: seen_listings.json
-          key: seen-listings-cache
-          restore-keys: seen-listings-cache
-
       - name: Run sniper
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: ${{ secrets.GIST_ID }}
         run: python sniper.py
-
-      - name: Save seen listings cache
-        uses: actions/cache/save@v4
-        if: always()
-        with:
-          path: seen_listings.json
-          key: seen-listings-cache-${{ github.run_id }}
