@@ -21,18 +21,51 @@ MAX_AGE_DAYS     = 3
 # ملف الذاكرة — يحفظ الإعلانات اللي شفناها
 SEEN_FILE = "seen_listings.json"  # GitHub Actions يحفظه في نفس المجلد
 
-# ===================== الذاكرة =====================
+# ===================== الذاكرة عبر GitHub Gist =====================
+GIST_TOKEN = os.environ.get("GIST_TOKEN", "")
+GIST_ID    = os.environ.get("GIST_ID", "")
+GIST_FILE  = "seen_listings.json"
+
 def load_seen():
+    """حمّل الذاكرة من GitHub Gist"""
+    if not GIST_TOKEN or not GIST_ID:
+        print("[seen] لا يوجد GIST_TOKEN أو GIST_ID — ذاكرة فارغة")
+        return set()
     try:
-        with open(SEEN_FILE, "r") as f:
-            return set(json.load(f))
-    except:
+        r = requests.get(
+            f"https://api.github.com/gists/{GIST_ID}",
+            headers={"Authorization": f"token {GIST_TOKEN}", "Accept": "application/vnd.github.v3+json"},
+            timeout=10
+        )
+        if r.status_code == 200:
+            raw_url = r.json()["files"][GIST_FILE]["raw_url"]
+            r2 = requests.get(raw_url, timeout=10)
+            data = r2.json()
+            print(f"[seen] تم تحميل {len(data)} إعلان من الذاكرة")
+            return set(data)
+        else:
+            print(f"[seen] خطأ في تحميل Gist: {r.status_code}")
+            return set()
+    except Exception as e:
+        print(f"[seen] خطأ: {e}")
         return set()
 
 def save_seen(seen):
+    """احفظ الذاكرة في GitHub Gist"""
+    if not GIST_TOKEN or not GIST_ID:
+        return
     try:
-        with open(SEEN_FILE, "w") as f:
-            json.dump(list(seen), f)
+        seen_list = list(seen)[-500:]  # احتفظ بآخر 500
+        r = requests.patch(
+            f"https://api.github.com/gists/{GIST_ID}",
+            headers={"Authorization": f"token {GIST_TOKEN}", "Accept": "application/vnd.github.v3+json"},
+            json={"files": {GIST_FILE: {"content": json.dumps(seen_list)}}},
+            timeout=10
+        )
+        if r.status_code == 200:
+            print(f"[seen] تم حفظ {len(seen_list)} إعلان في الذاكرة")
+        else:
+            print(f"[seen] خطأ في حفظ Gist: {r.status_code}")
     except Exception as e:
         print(f"[seen] خطأ في الحفظ: {e}")
 
@@ -507,4 +540,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
