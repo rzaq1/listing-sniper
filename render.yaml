@@ -1,0 +1,7 @@
+services:
+  - type: cron
+    name: listing-sniper
+    env: python
+    schedule: "*/15 * * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python sniper.py
