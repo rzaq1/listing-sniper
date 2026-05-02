@@ -348,24 +348,27 @@ def build_message(listing, exchanges):
 # ===================== Bybit =====================
 def fetch_bybit():
     results = []
+    bybit_headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Origin": "https://announcements.bybit.com",
+        "Referer": "https://announcements.bybit.com/",
+    }
     try:
+        # جرب Bybit announcements RSS بدل API
         for cat in ["new_crypto", "spot"]:
             r = requests.get(
                 "https://api.bybit.com/v5/announcements/index",
                 params={"locale":"en-US","type":cat,"page":1,"limit":30},
-                headers=HEADERS, timeout=10
+                headers=bybit_headers, timeout=15
             )
             if r.status_code != 200:
                 print(f"  Bybit {cat}: HTTP {r.status_code}")
                 continue
             items = r.json().get("result",{}).get("list",[])
-            print(f"  Bybit {cat}: {len(items)} إعلان إجمالاً")
-            for item in items[:5]:  # اطبع أول 5 للتشخيص
-                title = item.get("title","")
-                ts = item.get("dateTimestamp") or item.get("publishTime",0)
-                recent = is_recent(ts)
-                matched = is_listing(title)
-                print(f"    [{('✅' if recent else '❌ قديم')}][{('✅' if matched else '❌ لا يطابق')}] {title[:60]}")
+            print(f"  Bybit {cat}: {len(items)} إعلان")
             for item in items:
                 title = item.get("title","")
                 if not is_listing(title): continue
@@ -469,27 +472,30 @@ def fetch_okx():
 def fetch_binance():
     results = []
     try:
+        # Binance Zendesk API - بديل مجاني لا يحجب
         r = requests.get(
-            "https://www.binance.com/bapi/composite/v1/public/cms/article/list/query",
-            params={"type":1,"catalogId":48,"pageNo":1,"pageSize":30},
-            headers={"User-Agent":"Mozilla/5.0","Accept":"application/json"},
+            "https://binance.zendesk.com/api/v2/help_center/en-us/sections/360000167911/articles.json",
+            params={"per_page": 30, "sort_by": "created_at", "sort_order": "desc"},
+            headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
             timeout=10
         )
         if r.status_code != 200:
-            print(f"  Binance: HTTP {r.status_code}")
+            print(f"  Binance Zendesk: HTTP {r.status_code}")
             return results
-        data = r.json().get("data",{})
-        catalogs = data.get("catalogs",[])
-        articles = catalogs[0].get("articles",[]) if catalogs else data.get("articles",[])
-        print(f"  Binance raw articles: {len(articles)}")
+        articles = r.json().get("articles", [])
+        print(f"  Binance Zendesk: {len(articles)} إعلان")
         for item in articles:
             title = item.get("title","")
             if not is_listing(title): continue
-            ts = item.get("releaseDate",0)
+            created = item.get("created_at","")
+            ts = 0
+            try:
+                from datetime import datetime as dt
+                ts = int(dt.fromisoformat(created.replace("Z","+00:00")).timestamp())
+            except: pass
             if not is_recent(ts): continue
-            pub_dt = ts_to_riyadh(ts)
-            code = item.get("code","")
-            url = f"https://www.binance.com/en/support/announcement/{code}"
+            pub_dt = ts_to_riyadh(ts) if ts else None
+            url = item.get("html_url", "https://www.binance.com/en/support/announcement/")
             trade_utc = extract_trading_dt(fetch_page_text(url))
             trade_dt = trade_utc.astimezone(RIYADH_TZ) if trade_utc else None
             sym = extract_symbol(title)
